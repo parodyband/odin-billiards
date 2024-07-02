@@ -1,6 +1,6 @@
 package main
 
-import "core:bytes"
+import      "core:bytes"
 import rl   "vendor:raylib"
 
 TextureData :: enum {

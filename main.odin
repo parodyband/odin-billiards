@@ -6,7 +6,7 @@ import       "core:math/rand"
 import fmt   "core:fmt"
 import time  "core:time"
 import win32 "core:sys/windows"
-
+import "core:strconv"
 // Constants
 BALL_SCALE    :: 64
 PHYSICS_FPS   :: 60
@@ -17,6 +17,7 @@ FRICTION      :: 0.993
 BALL_COUNT    :: 16
 RESTITUTION   :: 0.999
 FLING_FACTOR  :: 20.0   
+RENDER_DEBUG  :: true
 
 // Structs
 Table :: struct {
@@ -29,7 +30,7 @@ Ball :: struct {
     atlasBounds                                         : rl.Rectangle,
     position, worldPosition, velocity, previousPosition : rl.Vector2,
     is_dragging                                         : bool,
-    drag_start, drag_current                            : rl.Vector2,
+    drag_current                                        : rl.Vector2,
 }
 
 Cursor :: struct {
@@ -48,8 +49,14 @@ GameState :: struct {
     real_screen_params : rl.Vector2,
 }
 
+PolygonCollider :: struct {
+    vertices : [dynamic]rl.Vector2,
+}
+
 // Global state
 game : GameState
+
+colliders : [6]PolygonCollider
 
 main :: proc() {
     init_game()
@@ -57,8 +64,9 @@ main :: proc() {
 
     for !rl.WindowShouldClose() {
         set_window_parameters(game.screen_width, game.screen_height, &game.real_screen_params)
-        update_game()
-        draw_game()
+        delta_time := rl.GetFrameTime()
+        update_game(delta_time)
+        draw_game(delta_time)
     }
 }
 
@@ -83,21 +91,25 @@ init_game :: proc() {
 }
 
 init_data :: proc() {
+
+    using game
     // Table
-    game.table = Table{
+    table = Table{
         atlasBounds     = {0, 0, 224, 128},
         collisionBounds = {23, 23, 178, 82},
         position        = {0, 0},
     }
 
-    tableBounds := rl.Vector2{f32(game.screen_width), f32(game.screen_height)}
-    game.table.position = {
-        f32(game.screen_width) / 2 - tableBounds.x / 2,
-        f32(game.screen_height) / 2 - tableBounds.y / 2,
+    tableBounds := rl.Vector2{f32(screen_width), f32(screen_height)}
+    table.position = {
+        f32(screen_width) / 2 - tableBounds.x / 2,
+        f32(screen_height) / 2 - tableBounds.y / 2,
     }
+    width_factor  := f32(screen_width) / table.atlasBounds.width
+    height_factor := f32(screen_height) / table.atlasBounds.height
 
     // Cursor
-    game.cursor = Cursor{
+    cursor = Cursor{
         atlasBounds = {224, 64, 32, 32},
         position    = {0, 0},
     }
@@ -106,15 +118,69 @@ init_data :: proc() {
     for i := 0; i < BALL_COUNT; i += 1 {
         angle := rand.float32_range(0, 2 * m.PI)
         direction := rl.Vector2{m.cos(angle), m.sin(angle)}
-        game.balls[i] = Ball{
+        balls[i] = Ball{
             atlasBounds = {237, 13, 22, 22},
             position = {
-                f32(game.screen_width) / 2 + f32(i) * f32(BALL_SCALE) * 1.1,
-                f32(game.screen_height) / 2,
+                f32(screen_width) / 4 + f32(i) * f32(BALL_SCALE) * 1.1,
+                f32(screen_height) / 2,
             },
             velocity = direction * 100,
         }
-        game.balls[i].previousPosition = game.balls[i].position
+        balls[i].previousPosition = balls[i].position
+    }
+
+    colliders[0] = PolygonCollider{
+        vertices = {
+            {26, 16},
+            {102, 16},
+            {97, 22},
+            {32, 22},
+        }
+    }
+    colliders[1] = PolygonCollider{
+        vertices = {
+            {121, 16},
+            {198, 16},
+            {193, 22},
+            {126, 22},
+        }
+    }
+    colliders[2] = PolygonCollider{
+        vertices = {
+            {25, 112},
+            {32, 106},
+            {97, 106},
+            {103, 112},
+        }
+    }
+    colliders[3] = PolygonCollider{
+        vertices = {
+            {121, 112},
+            {126, 106},
+            {193, 106},
+            {198, 112},
+        }
+    }
+    colliders[4] = PolygonCollider{
+        vertices = {
+            {16, 25},
+            {22, 32},
+            {22, 97},
+            {16, 103},
+        }
+    }
+    colliders[5] = PolygonCollider{
+        vertices = {
+            {202, 31},
+            {208, 25},
+            {208, 103},
+            {202, 97},
+        }
+    }
+    for collider in colliders {
+        for i := 0; i < len(collider.vertices); i += 1 {
+            collider.vertices[i] = collider.vertices[i] * rl.Vector2{width_factor, height_factor}
+        }
     }
 }
 
@@ -124,11 +190,8 @@ cleanup :: proc() {
     rl.CloseWindow()
 }
 
-update_game :: proc() {
-    delta_time := rl.GetFrameTime()
-    update_physics(delta_time)
+update_game :: proc(delta_time: f32) {
     update_cursor()
-
     mouse_over_any_ball := false
     for i := 0; i < BALL_COUNT; i += 1 {
         ball := &game.balls[i]
@@ -160,7 +223,19 @@ update_game :: proc() {
 update_physics :: proc(delta_time: f32) {
     for i := 0; i < BALL_COUNT; i += 1 {
         update_ball(&game.balls[i], delta_time)
+        //wrap if offscreen
+        if game.balls[i].position.x < 0 {
+            game.balls[i].position.x = f32(game.screen_width)
+        } else if game.balls[i].position.x > f32(game.screen_width) {
+            game.balls[i].position.x = 0
+        }
+        if game.balls[i].position.y < 0 {
+            game.balls[i].position.y = f32(game.screen_height)
+        } else if game.balls[i].position.y > f32(game.screen_height) {
+            game.balls[i].position.y = 0
+        }
     }
+
     check_balls_collision()
 }
 
@@ -168,20 +243,22 @@ update_ball :: proc(ball: ^Ball, delta_time: f32) {
     ball.previousPosition = ball.position
     ball.position += ball.velocity * delta_time
     ball.velocity *= FRICTION
-    check_ball_wall_collision(ball)
+    //check_ball_wall_collision(ball)
+    for i := 0; i < len(colliders); i += 1 {
+        check_ball_polygon_collision(ball, &colliders[i])
+    }
     check_minimum_velocity(ball)
 }
 
 start_drag :: proc(ball: ^Ball) {
     ball.is_dragging = true
-    ball.drag_start = rl.GetMousePosition()
-    ball.drag_current = ball.drag_start
+    ball.drag_current = rl.GetMousePosition()
 }
 
 end_drag :: proc(ball: ^Ball) {
     if ball.is_dragging {
         ball.is_dragging = false
-        fling_vector := ball.drag_start - ball.drag_current
+        fling_vector := ball.position - ball.drag_current
         drag_distance := m.length(fling_vector)
         
         if drag_distance > 1 {
@@ -196,51 +273,53 @@ update_cursor :: proc() {
     game.cursor.position = rl.GetMousePosition()
 }
 
-draw_game :: proc() {
+draw_game :: proc(delta_time: f32) {
     rl.BeginTextureMode(game.fullscreen_texture)
     rl.ClearBackground(rl.BLACK)
     draw_table()
     draw_balls()
+    update_physics(delta_time)
 
     rl.DrawFPS(10, 10)
     rl.EndTextureMode()
 
     // Draw fullscreen texture
-    rl.BeginDrawing()
+    {
+        rl.BeginDrawing()
+        source_rec := rl.Rectangle{
+            0,
+            0,
+            f32(game.fullscreen_texture.texture.width),
+            -f32(game.fullscreen_texture.texture.height),
+        }
+        dest_rec := rl.Rectangle{
+            0,
+            0,
+            game.real_screen_params.x,
+            game.real_screen_params.y,
+        }
 
-    source_rec := rl.Rectangle{
-        0,
-        0,
-        f32(game.fullscreen_texture.texture.width),
-        -f32(game.fullscreen_texture.texture.height),
+        rl.DrawTexturePro(
+            game.fullscreen_texture.texture,
+            source_rec,
+            dest_rec,
+            {0, 0},
+            0,
+            rl.WHITE
+        )
+
+        // Draw cursor
+        rl.DrawTexturePro(
+            game.sprite_atlas,
+            game.cursor.atlasBounds,
+            {game.cursor.position.x, game.cursor.position.y, 64, 64},
+            {32, 32},
+            0,
+            rl.WHITE
+        )
+
+        rl.EndDrawing()
     }
-    dest_rec := rl.Rectangle{
-        0,
-        0,
-        game.real_screen_params.x,
-        game.real_screen_params.y,
-    }
-
-    rl.DrawTexturePro(
-        game.fullscreen_texture.texture,
-        source_rec,
-        dest_rec,
-        {0, 0},
-        0,
-        rl.WHITE
-    )
-
-    // Draw cursor
-    rl.DrawTexturePro(
-        game.sprite_atlas,
-        game.cursor.atlasBounds,
-        {game.cursor.position.x, game.cursor.position.y, 64, 64},
-        {32, 32},
-        0,
-        rl.WHITE
-    )
-
-    rl.EndDrawing()
 }
 
 draw_table :: proc() {

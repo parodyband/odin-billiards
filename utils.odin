@@ -1,5 +1,5 @@
 package main
-import m "core:math/linalg/hlsl"
+import m "core:math/linalg"
 import rl "vendor:raylib"
 
 // HSV represents a color in HSV color space
@@ -10,7 +10,7 @@ HSV :: struct {
 // hsv_to_rgb converts HSV color to RGB color
 hsv_to_rgb :: proc(hsv: HSV) -> rl.Color {
     c := hsv.v * hsv.s
-    x := c * (1 - m.abs_float(m.fmod(hsv.h / 60, 2) - 1))
+    x := c * (1 - m.abs(m.mod(hsv.h / 60, 2) - 1))
     m := hsv.v - c
 
     r, g, b: f32
@@ -40,8 +40,8 @@ hsv_to_rgb :: proc(hsv: HSV) -> rl.Color {
 // rgb_to_hsv converts RGB color to HSV color
 rgb_to_hsv :: proc(color: rl.Color) -> HSV {
     r, g, b := f32(color.r) / 255, f32(color.g) / 255, f32(color.b) / 255
-    cmax := m.max_float(r, m.max_float(g, b))
-    cmin :=m.min_float(r, m.min_float(g, b))
+    cmax := m.max(r, m.max(g, b))
+    cmin :=m.min(r, m.min(g, b))
     diff := cmax - cmin
 
     h: f32
@@ -50,7 +50,7 @@ rgb_to_hsv :: proc(color: rl.Color) -> HSV {
     } else {
         switch cmax {
         case r:
-            h = 60 * m.fmod((g - b) / diff, 6)
+            h = 60 * m.mod((g - b) / diff, 6)
         case g:
             h = 60 * ((b - r) / diff + 2)
         case b:
@@ -71,4 +71,8 @@ center_render_bounds_offset :: proc(source_rect, dest_rect: rl.Rectangle) -> rl.
         source_rect.x + (source_rect.width * scale_x) / 2,
         source_rect.y + (source_rect.height * scale_y) / 2,
     }
+}
+
+remap_float :: proc(value, in_min, in_max, out_min, out_max: f32) -> f32 {
+    return out_min + (value - in_min) * (out_max - out_min) / (in_max - in_min)
 }
