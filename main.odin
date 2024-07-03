@@ -6,7 +6,7 @@ import       "core:math/rand"
 import fmt   "core:fmt"
 import time  "core:time"
 import win32 "core:sys/windows"
-import "core:strconv"
+import       "core:strconv"
 // Constants
 BALL_SCALE    :: 64
 PHYSICS_FPS   :: 60
@@ -31,6 +31,7 @@ Ball :: struct {
     position, worldPosition, velocity, previousPosition : rl.Vector2,
     is_dragging                                         : bool,
     drag_current                                        : rl.Vector2,
+    is_out_of_play                                      : bool,
 }
 
 Cursor :: struct {
@@ -132,6 +133,7 @@ init_data :: proc() {
                 f32(screen_height) / 2,
             },
             velocity = direction * 100,
+            is_out_of_play = false,
         }
         balls[i].previousPosition = balls[i].position
     }
@@ -219,7 +221,6 @@ init_data :: proc() {
         circle_colliders[i].position = circle_colliders[i].position * rl.Vector2{width_factor, height_factor}
         circle_colliders[i].radius *= width_factor
     }
-
 }
 
 cleanup :: proc() {
@@ -260,6 +261,13 @@ update_game :: proc(delta_time: f32) {
 
 update_physics :: proc(delta_time: f32) {
     for i := 0; i < BALL_COUNT; i += 1 {
+        if game.balls[i].is_out_of_play {
+            continue
+        }
+
+        for j := i + 1; j < BALL_COUNT; j += 1 {
+            resolve_collision(&game.balls[i], &game.balls[j])
+        }
         update_ball(&game.balls[i], delta_time)
         //wrap if offscreen
         if game.balls[i].position.x < 0 {
@@ -273,17 +281,18 @@ update_physics :: proc(delta_time: f32) {
             game.balls[i].position.y = 0
         }
     }
-
-    check_balls_collision()
 }
 
 update_ball :: proc(ball: ^Ball, delta_time: f32) {
     ball.previousPosition = ball.position
     ball.position += ball.velocity * delta_time
     ball.velocity *= FRICTION
-    //check_ball_wall_collision(ball)
-    for i := 0; i < len(colliders); i += 1 {
-        check_ball_polygon_collision(ball, &colliders[i])
+    check_ball_polygon_collision(ball, colliders[:])
+    
+    // eventually make this nicer, animation maybe
+    should_disable := check_ball_circle_trigger(ball, circle_colliders[:])
+    if should_disable {
+        ball.is_out_of_play = true
     }
     check_minimum_velocity(ball)
 }
@@ -386,6 +395,9 @@ draw_table :: proc() {
 
 draw_balls :: proc() {
     for i := 0; i < BALL_COUNT; i += 1 {
+        if game.balls[i].is_out_of_play {
+            continue
+        }
         draw_ball(&game.balls[i])
     }
 }
