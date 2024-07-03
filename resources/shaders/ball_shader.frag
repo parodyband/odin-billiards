@@ -40,8 +40,8 @@ void main()
 {
     float scale = 1.5;
 
-    vec2 new_uv = floor(uv * 28) / 28;
-    new_uv += 1.0 / (28.0 * 2);
+    vec2 new_uv = floor(uv * 30) / 30;
+    new_uv += 1.0 / (30.0 * 2);
     
     // UV to 3D point on a sphere
     vec2 sphereUV = (new_uv * 2.0 - 1.0) * scale;
