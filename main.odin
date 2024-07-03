@@ -554,7 +554,7 @@ draw_ball :: proc(using ball: ^Ball) {
     
     angular_velocity.x -= rotation_x
     angular_velocity.y -= rotation_y
-    angular_velocity.z -= speed * rotation_factor * 0.04 // Small z-rotation for rolling effect
+    angular_velocity.z -= speed * rotation_factor * 0.04 // small z-rotation for rolling effect
 
     angular_velocity *= friction
 
