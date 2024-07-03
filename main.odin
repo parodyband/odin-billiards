@@ -544,28 +544,22 @@ draw_ball :: proc(using ball: ^Ball) {
     new_ball_scale := f32(BALL_SCALE * 1.5)
     dest_rect := rl.Rectangle{position.x - new_ball_scale/2, position.y - new_ball_scale/2, new_ball_scale, new_ball_scale}
 
-    // Update rotation based on velocity
     speed := m.length(velocity)
     rotation_factor : f32 = 0.0001 // Adjust this to control rotation speed
     friction : f32 = 0.98 // Friction factor for rotation
 
-    // Calculate rotation based on movement
     movement := position - previousPosition
-    rotation_x := -movement.y * rotation_factor // Rotate around x-axis based on vertical movement
-    rotation_y := movement.x * rotation_factor  // Rotate around y-axis based on horizontal movement
+    rotation_x := movement.y * rotation_factor // Rotate around x-axis based on vertical movement
+    rotation_y := -movement.x * rotation_factor  // Rotate around y-axis based on horizontal movement
     
-    // Update angular velocity
     angular_velocity.x -= rotation_x
     angular_velocity.y -= rotation_y
     angular_velocity.z -= speed * rotation_factor * 0.04 // Small z-rotation for rolling effect
 
-    // Apply friction to angular velocity
     angular_velocity *= friction
 
-    // Update rotation
     rotation += angular_velocity
 
-    // Stop rotation when it's very slow
     min_angular_velocity : f32 = 0.001
     if m.length(angular_velocity) < min_angular_velocity {
         angular_velocity = {0, 0, 0}
@@ -580,7 +574,6 @@ draw_ball :: proc(using ball: ^Ball) {
     
     rl.BeginShaderMode(game.ball_shader);
 
-    // Pass rotation to shader
     rotation_loc := rl.GetShaderLocation(game.ball_shader, "iRotation")
     rl.SetShaderValue(game.ball_shader, rotation_loc, &rotation, rl.ShaderUniformDataType.VEC3)
     
