@@ -37,6 +37,21 @@ check_ball_wall_collision :: proc(ball: ^Ball) {
 }
 
 check_ball_polygon_collision :: proc(ball: ^Ball, collider: ^PolygonCollider) {
+
+    if RENDER_DEBUG {
+        for i := 0; i < len(collider.vertices); i += 1 {
+            a := collider.vertices[i]
+            b := collider.vertices[(i + 1) % len(collider.vertices)]
+            ap := ball.position - a
+            ab := b - a
+            center_point := (a + b) / 2
+            outward_normal := rl.Vector2{ab.y, -ab.x}
+            outward_normal = m.normalize(outward_normal)
+            rl.DrawLineEx(center_point, center_point + outward_normal * 20, 2, rl.GREEN)
+            rl.DrawLineEx(a, b, 2, rl.RED)
+        }
+    }
+
     if ball.velocity == {0, 0} do return
     using collider
     ball_radius := f32(BALL_SCALE / 2)
@@ -50,13 +65,11 @@ check_ball_polygon_collision :: proc(ball: ^Ball, collider: ^PolygonCollider) {
         a := collider.vertices[i]
         b := collider.vertices[(i + 1) % vertex_count]
 
-        // Find the closest point on the line segment to the ball
         ap := ball.position - a
         ab := b - a
         t := clamp(m.dot(ap, ab) / m.dot(ab, ab), 0, 1)
         closest := a + ab * t
 
-        // Calculate the distance and normal
         to_ball := ball.position - closest
         distance := m.length(to_ball)
 
@@ -64,15 +77,6 @@ check_ball_polygon_collision :: proc(ball: ^Ball, collider: ^PolygonCollider) {
             min_distance = distance
             closest_point = closest
             collision_normal = m.normalize(to_ball)
-        }
-
-        // Debug visualization
-        center_point := (a + b) / 2
-        outward_normal := rl.Vector2{ab.y, -ab.x}
-        outward_normal = m.normalize(outward_normal)
-        if RENDER_DEBUG {
-            rl.DrawLineEx(a, b, 2, rl.RED)
-            rl.DrawLineEx(center_point, center_point + outward_normal * 20, 2, rl.GREEN)
         }
     }
 
@@ -83,9 +87,18 @@ check_ball_polygon_collision :: proc(ball: ^Ball, collider: ^PolygonCollider) {
         ball.velocity = m.reflect(ball.velocity, collision_normal) * RESTITUTION
     }
     if RENDER_DEBUG {
-        // Debug visualization for closest point and normal
         rl.DrawCircleV(closest_point, 5, rl.BLUE)
         rl.DrawLineEx(closest_point, closest_point + collision_normal * 20, 2, rl.YELLOW)
+    }
+}
+
+check_ball_circle_trigger :: proc (ball: ^Ball, collider: ^CircleCollider) {
+    if ball.velocity == {0, 0} do return
+    using collider
+    ball_radius := f32(BALL_SCALE / 2)
+    distance := m.length(ball.position - collider.position)
+    if distance < ball_radius + collider.radius {
+        ball.velocity = m.reflect(ball.velocity, m.normalize(ball.position - collider.position)) * RESTITUTION
     }
 }
 

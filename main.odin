@@ -17,7 +17,7 @@ FRICTION      :: 0.993
 BALL_COUNT    :: 16
 RESTITUTION   :: 0.999
 FLING_FACTOR  :: 20.0   
-RENDER_DEBUG  :: true
+RENDER_DEBUG  :: false
 
 // Structs
 Table :: struct {
@@ -53,10 +53,17 @@ PolygonCollider :: struct {
     vertices : [dynamic]rl.Vector2,
 }
 
+CircleCollider :: struct {
+    position : rl.Vector2,
+    radius   : f32,
+}
+
 // Global state
 game : GameState
 
 colliders : [6]PolygonCollider
+
+circle_colliders : [6]CircleCollider
 
 main :: proc() {
     init_game()
@@ -132,8 +139,8 @@ init_data :: proc() {
     colliders[0] = PolygonCollider{
         vertices = {
             {26, 16},
-            {102, 16},
-            {97, 22},
+            {103, 16},
+            {98, 22},
             {32, 22},
         }
     }
@@ -182,6 +189,37 @@ init_data :: proc() {
             collider.vertices[i] = collider.vertices[i] * rl.Vector2{width_factor, height_factor}
         }
     }
+
+    circle_colliders[0] = CircleCollider{
+        position = {16, 16},
+        radius = 8,
+    }
+    circle_colliders[1] = CircleCollider{
+        position = {208, 16},
+        radius = 8,
+    }
+    circle_colliders[2] = CircleCollider{
+        position = {16, 112},
+        radius = 8,
+    }
+    circle_colliders[3] = CircleCollider{
+        position = {208, 112},
+        radius = 8,
+    }
+    circle_colliders[4] = CircleCollider{
+        position = {112, 16},
+        radius = 8,
+    }
+    circle_colliders[5] = CircleCollider{
+        position = {112, 112},
+        radius = 8,
+    }
+
+    for i := 0; i < len(circle_colliders); i += 1 {
+        circle_colliders[i].position = circle_colliders[i].position * rl.Vector2{width_factor, height_factor}
+        circle_colliders[i].radius *= width_factor
+    }
+
 }
 
 cleanup :: proc() {
@@ -277,6 +315,11 @@ draw_game :: proc(delta_time: f32) {
     rl.BeginTextureMode(game.fullscreen_texture)
     rl.ClearBackground(rl.BLACK)
     draw_table()
+
+    if RENDER_DEBUG {
+        draw_debug_colliders()
+    }
+
     draw_balls()
     update_physics(delta_time)
 
@@ -319,6 +362,13 @@ draw_game :: proc(delta_time: f32) {
         )
 
         rl.EndDrawing()
+    }
+}
+
+draw_debug_colliders :: proc()
+{
+    for collider in circle_colliders {
+        rl.DrawCircleLinesV(collider.position, collider.radius, rl.RED)
     }
 }
 
