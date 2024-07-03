@@ -545,12 +545,12 @@ draw_ball :: proc(using ball: ^Ball) {
     dest_rect := rl.Rectangle{position.x - new_ball_scale/2, position.y - new_ball_scale/2, new_ball_scale, new_ball_scale}
 
     speed := m.length(velocity)
-    rotation_factor : f32 = 0.0001 // Adjust this to control rotation speed
-    friction : f32 = 0.98 // Friction factor for rotation
+    rotation_factor : f32 = 0.0001
+    friction : f32 = 0.98
 
     movement := position - previousPosition
-    rotation_x := movement.y * rotation_factor // Rotate around x-axis based on vertical movement
-    rotation_y := -movement.x * rotation_factor  // Rotate around y-axis based on horizontal movement
+    rotation_x := movement.y * rotation_factor // x-axis based on vertical movement
+    rotation_y := -movement.x * rotation_factor  // y-axis based on horizontal movement
     
     angular_velocity.x -= rotation_x
     angular_velocity.y -= rotation_y
