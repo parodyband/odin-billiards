@@ -81,9 +81,7 @@ check_ball_polygon_collision :: proc(ball: ^Ball, colliders: []PolygonCollider) 
             }
         }
 
-        // Check if collision occurred
         if min_distance <= ball_radius {
-            // Collision detected, update ball position and velocity
             ball.position = closest_point + collision_normal * ball_radius
             ball.velocity = m.reflect(ball.velocity, collision_normal) * RESTITUTION
             PlayRandomAudioFromPool(&side_hit_sound_pool)

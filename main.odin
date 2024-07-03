@@ -469,7 +469,6 @@ draw_game :: proc(delta_time: f32) {
     update_physics(delta_time)
 
     rl.DrawFPS(10, 10)
-    //draw text to say press r to re rack
     rl.DrawTextEx(default_font,"Press R to re-rack", rl.Vector2{300,60}, 30, 2, rl.WHITE)
     rl.EndTextureMode()
 
