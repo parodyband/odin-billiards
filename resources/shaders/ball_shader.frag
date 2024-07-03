@@ -20,12 +20,28 @@ mat3 rotateXYZ(vec3 angle) {
     return rotZ * rotY * rotX;
 }
 
+float srgbToLinear(float srgb) {
+    return mix(
+        pow(srgb, float(2.2)),
+        srgb * 0.305 + 0.45,
+        step(0.04045, srgb)
+    );
+}
+
+float linearToSrgb(float linear) {
+    return mix(
+        pow(linear, 1.0 / 2.2),
+        linear * 1.055 - 0.055,
+        step(0.0031308, linear)
+    );
+}
+
 void main()
 {
-    float scale = 1.01;
+    float scale = 1.5;
 
-    //fake pixelate uv
-    vec2 new_uv = floor(uv * 27) / 27;
+    vec2 new_uv = floor(uv * 28) / 28;
+    new_uv += 1.0 / (28.0 * 2);
 
     
     // Convert UV to 3D point on a sphere
@@ -51,15 +67,17 @@ void main()
         atan(rotatedSpherePoint.z, rotatedSpherePoint.x) / (2.0 * PI) + 0.5,
         asin(rotatedSpherePoint.y) / PI + 0.5
     );
-    finalUV.x = fract(finalUV.x * 2);
+    finalUV.x = 1.0 - abs(mod(finalUV.x * 2, 2.0) - 1.0);
     
     vec4 texColor = texture(texture1, finalUV);
 
     texColor.rgb *= fragColor.rgb;
     
     // Lighting calculation (using unrotated normal)
-    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0)); // Light direction in world space
+    vec3 lightDir = normalize(vec3(1.5, 1.0, 1.0)); // Light direction in world space
     float diffuse = max(dot(normal, lightDir), 0.0);
+    //smooth out light intensity
+    diffuse = linearToSrgb(diffuse);
     float ambient = 0.5; // Ambient light intensity
     vec3 viewDir = vec3(0.0, 0.0, 1.0); // Assuming the view is always from positive z
     vec3 reflectDir = reflect(-lightDir, normal);

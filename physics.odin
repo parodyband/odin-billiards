@@ -86,6 +86,7 @@ check_ball_polygon_collision :: proc(ball: ^Ball, colliders: []PolygonCollider) 
             // Collision detected, update ball position and velocity
             ball.position = closest_point + collision_normal * ball_radius
             ball.velocity = m.reflect(ball.velocity, collision_normal) * RESTITUTION
+            PlayRandomAudioFromPool(&side_hit_sound_pool)
         }
 
         if RENDER_DEBUG {
@@ -144,6 +145,10 @@ resolve_collision :: proc(ball1, ball2: ^Ball) {
         
         ball1.velocity -= impulse
         ball2.velocity += impulse
+
+        if m.length(impulse) > 15 {
+            PlayRandomAudioFromPool(&hit_sound_pool)
+        }
         
         // Separate balls to prevent overlapping
         overlap := BALL_SCALE - distance

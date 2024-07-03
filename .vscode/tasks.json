@@ -14,7 +14,7 @@
         {
             "label": "Build Release",
             "type": "shell",
-            "command": "odin build . -out:build/odin-billiards.exe -o:speed -subsystem:windows",
+            "command": "odin build . -out:build/odin-billiards.exe -o:speed -subsystem:windows -resource:resources/icon.rc",
             "group": {
                 "kind": "build",
                 "isDefault": true

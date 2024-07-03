@@ -7,18 +7,22 @@ import fmt   "core:fmt"
 import time  "core:time"
 import win32 "core:sys/windows"
 import       "core:strconv"
+
 // Constants
 BALL_SCALE    :: 64
 PHYSICS_FPS   :: 60
 PHYSICS_DT    :: 1.0 / f32(PHYSICS_FPS)
-MIN_VELOCITY  :: 10.0
-MAX_VELOCITY  :: 5000.0
-FRICTION      :: 0.993
+MIN_VELOCITY  :: 5.0
+MAX_VELOCITY  :: 4000.0
+FRICTION      :: 0.99
 BALL_COUNT    :: 16
-RESTITUTION   :: 0.999
-FLING_FACTOR  :: 20.0   
+RESTITUTION   :: 0.9999
+FLING_FACTOR  :: 10.0   
 RENDER_DEBUG  :: false
-GLSL_VERSION :: "#version 330"
+BALL_DIAMETER :: f32(BALL_SCALE) * 1.1
+RACK_X_OFFSET :: 0.7      // Percentage of screen width
+RACK_Y_OFFSET :: 0.5      // Percentage of screen height
+CUE_BALL_X_OFFSET :: 0.25 // Percentage of screen width for cue ball
 
 DIRECTION_UP     :: rl.Vector2{0, -1}
 DIRECTION_DOWN   :: rl.Vector2{0, 1}
@@ -45,6 +49,7 @@ Ball :: struct {
     is_out_of_play                                      : bool,
     angular_velocity                                    : rl.Vector3,
     texture                                             : rl.Texture2D,
+    can_fling                                           : bool,
 }
 
 Cursor :: struct {
@@ -59,14 +64,12 @@ GameState :: struct {
     screen_width       : i32,
     screen_height      : i32,
     sprite_atlas       : rl.Texture2D,
-    ball_animation_texture : rl.Texture2D,
     ball_shader        : rl.Shader,
     fullscreen_texture : rl.RenderTexture2D,
     real_screen_params : rl.Vector2,
     time               : f64,
     delta_time         : f32,
     balltextures       : [16]rl.Texture2D
-
 }
 
 PolygonCollider :: struct {
@@ -87,10 +90,7 @@ BallAnimation :: struct {
 game : GameState
 
 colliders : [6]PolygonCollider
-
 circle_colliders : [6]CircleCollider
-
-ball_animations : BallAnimation
 
 
 main :: proc() {
@@ -111,6 +111,7 @@ init_game :: proc() {
     monitor_id := i32(0)
 
     rl.InitWindow(game.screen_width, game.screen_height, "Billiards")
+    rl.InitAudioDevice()
     rl.SetWindowIcon(load_image_from_embedded(TextureData.icon))
     rl.SetWindowMonitor(monitor_id)
     rl.SetConfigFlags(rl.ConfigFlags{rl.ConfigFlag.VSYNC_HINT})
@@ -121,14 +122,30 @@ init_game :: proc() {
     game.real_screen_params = rl.Vector2{f32(game.screen_width), f32(game.screen_height)}
     game.fullscreen_texture = rl.LoadRenderTexture(game.screen_width, game.screen_height)
     game.sprite_atlas = load_texture_from_embedded(TextureData.sprite_sheet)
-    game.ball_shader = rl.LoadShader("resources/shaders/ball_shader.vert", "resources/shaders/ball_shader.frag")
-
+    game.ball_shader = load_shader_from_embedded(ShaderData.ball_shader_frag, ShaderData.ball_shader_vert)
     init_data()
 }
 
 init_data :: proc() {
 
     using game
+    init_sounds()
+    default_font = load_font_from_embedded(FontData.romulus)
+    if default_font.texture.id == 0 {
+        fmt.println("Failed to load embedded font")
+    } else {
+        fmt.println("Embedded font loaded successfully: baseSize=%d, glyphCount=%d\n", 
+                default_font.baseSize, default_font.glyphCount)
+    }
+
+    // Compare with loading from file
+    file_font := rl.LoadFont("resources/fonts/romulus.png")
+    if file_font.texture.id == 0 {
+        fmt.println("Failed to load font from file")
+    } else {
+        fmt.println("File font loaded successfully: baseSize=%d, glyphCount=%d\n", 
+                file_font.baseSize, file_font.glyphCount)
+    }
     // Table
     table = Table{
         atlasBounds     = {0, 0, 224, 128},
@@ -169,20 +186,20 @@ init_data :: proc() {
 
     // Balls
     for i := 0; i < BALL_COUNT; i += 1 {
-        angle := rand.float32_range(0, 2 * m.PI)
-        direction := rl.Vector2{m.cos(angle), m.sin(angle)}
+        can_fling := BALL_COUNT-1 == i
         balls[i] = Ball{
             atlasBounds = {0, 0, 767, 767},
             position = {
                 f32(screen_width) / 4 + f32(i) * f32(BALL_SCALE) * 1.1,
                 f32(screen_height) / 2,
             },
-            velocity = direction * 100,
             is_out_of_play = false,
             texture = game.balltextures[i],
+            can_fling = can_fling,
         }
         balls[i].previousPosition = balls[i].position
     }
+    rack_balls(&balls)
 
     colliders[0] = PolygonCollider{
         vertices = {
@@ -272,13 +289,25 @@ init_data :: proc() {
 cleanup :: proc() {
     rl.UnloadRenderTexture(game.fullscreen_texture)
     rl.UnloadTexture(game.sprite_atlas)
-    rl.UnloadTexture(game.ball_animation_texture)
+    for i := 0; i < BALL_COUNT; i += 1 {
+        rl.UnloadTexture(game.balls[i].texture)
+    }
+    rl.UnloadShader(game.ball_shader)
+    UnloadSoundsFromPool(rack_sound_pool)
+    UnloadSoundsFromPool(strike_sound_pool)
+    UnloadSoundsFromPool(hit_sound_pool)
+    UnloadSoundsFromPool(side_hit_sound_pool)
+    rl.CloseAudioDevice()
     rl.CloseWindow()
 }
 
 update_game :: proc(delta_time: f32) {
     update_cursor()
     mouse_over_any_ball := false
+
+    if rl.IsKeyPressed(rl.KeyboardKey.R) {
+        rack_balls(&game.balls)
+    }
     for i := 0; i < BALL_COUNT; i += 1 {
         ball := &game.balls[i]
         
@@ -339,9 +368,68 @@ update_ball :: proc(ball: ^Ball, delta_time: f32) {
     // eventually make this nicer, animation maybe
     should_disable := check_ball_circle_trigger(ball, circle_colliders[:])
     if should_disable {
-        ball.is_out_of_play = true
+        if ball.can_fling {
+            ball.position = rl.Vector2{
+                f32(game.screen_width) * CUE_BALL_X_OFFSET,
+                f32(game.screen_height) * RACK_Y_OFFSET,
+            }
+            ball.velocity = {0, 0}
+            ball.angular_velocity = {0, 0, 0}
+        } else {
+            PlayRandomAudioFromPool(&pocket_sound_pool)
+            ball.is_out_of_play = true
+        }
+       
     }
     check_minimum_velocity(ball)
+}
+
+rack_balls :: proc(balls: ^[BALL_COUNT]Ball) {
+    triangle_positions := [15]rl.Vector2{
+        rl.Vector2{0, 0},
+        rl.Vector2{0.866, -0.5},    // (sqrt(3)/2, -1)
+        rl.Vector2{0.866, 0.5},
+        rl.Vector2{1.732, -1},      // (sqrt(3), -2)
+        rl.Vector2{1.732, 0},
+        rl.Vector2{1.732, 1},
+        rl.Vector2{2.598, -1.5},    // (3*sqrt(3)/2, -3)
+        rl.Vector2{2.598, -0.5},
+        rl.Vector2{2.598, 0.5},
+        rl.Vector2{2.598, 1.5},
+        rl.Vector2{3.464, -2},      // (2*sqrt(3), -4)
+        rl.Vector2{3.464, -1},
+        rl.Vector2{3.464, 0},
+        rl.Vector2{3.464, 1},
+        rl.Vector2{3.464, 2},
+    }
+
+    start_x := f32(game.screen_width) * RACK_X_OFFSET
+    start_y := f32(game.screen_height) * RACK_Y_OFFSET
+    ball_radius := BALL_DIAMETER * 0.9
+
+    for i := 0; i < len(triangle_positions); i += 1 {
+        balls[i].position = rl.Vector2{
+            start_x + triangle_positions[i].x * ball_radius,
+            start_y + triangle_positions[i].y * ball_radius,
+        }
+        balls[i].velocity = {0, 0}
+        balls[i].is_out_of_play = false
+        balls[i].previousPosition = balls[i].position
+        balls[i].angular_velocity = {0, 0, 0}
+        balls[i].rotation = {0, 0, 0}
+    }
+
+    // Position the cue ball
+    cue_ball := &balls[BALL_COUNT - 1]
+    cue_ball.position = rl.Vector2{
+        f32(game.screen_width) * CUE_BALL_X_OFFSET,
+        f32(game.screen_height) * RACK_Y_OFFSET,
+    }
+    cue_ball.velocity = {0, 0}
+    cue_ball.is_out_of_play = false
+    cue_ball.previousPosition = cue_ball.position
+    cue_ball.angular_velocity = {0, 0, 0}
+    PlayRandomAudioFromPool(&rack_sound_pool)
 }
 
 start_drag :: proc(ball: ^Ball) {
@@ -350,7 +438,7 @@ start_drag :: proc(ball: ^Ball) {
 }
 
 end_drag :: proc(ball: ^Ball) {
-    if ball.is_dragging {
+    if ball.is_dragging && ball.can_fling{
         ball.is_dragging = false
         fling_vector := ball.position - ball.drag_current
         drag_distance := m.length(fling_vector)
@@ -359,6 +447,7 @@ end_drag :: proc(ball: ^Ball) {
             fling_strength := clamp(drag_distance * FLING_FACTOR, MIN_VELOCITY, MAX_VELOCITY)
             fling_velocity := m.normalize(fling_vector) * fling_strength
             ball.velocity = fling_velocity
+            PlayRandomAudioFromPool(&strike_sound_pool)
         }
     }
 }
@@ -380,6 +469,8 @@ draw_game :: proc(delta_time: f32) {
     update_physics(delta_time)
 
     rl.DrawFPS(10, 10)
+    //draw text to say press r to re rack
+    rl.DrawTextEx(default_font,"Press R to re-rack", rl.Vector2{300,60}, 30, 2, rl.WHITE)
     rl.EndTextureMode()
 
     // Draw fullscreen texture
@@ -450,7 +541,7 @@ draw_balls :: proc() {
 }
 
 draw_ball :: proc(using ball: ^Ball) {
-    new_ball_scale := f32(BALL_SCALE * 1)
+    new_ball_scale := f32(BALL_SCALE * 1.5)
     dest_rect := rl.Rectangle{position.x - new_ball_scale/2, position.y - new_ball_scale/2, new_ball_scale, new_ball_scale}
 
     // Update rotation based on velocity
@@ -481,9 +572,9 @@ draw_ball :: proc(using ball: ^Ball) {
     }
 
     ball_color := rl.WHITE
-    if is_dragging {
+    if is_dragging && can_fling{
         ball_color = rl.GREEN
-    } else if is_mouse_over_ball(ball) {
+    } else if is_mouse_over_ball(ball) && can_fling{
         ball_color = rl.RED
     }
     
@@ -492,10 +583,6 @@ draw_ball :: proc(using ball: ^Ball) {
     // Pass rotation to shader
     rotation_loc := rl.GetShaderLocation(game.ball_shader, "iRotation")
     rl.SetShaderValue(game.ball_shader, rotation_loc, &rotation, rl.ShaderUniformDataType.VEC3)
-    
-    // Set the texture for the ball animation
-    spritesheet_location := rl.GetShaderLocation(game.ball_shader, "animationSheet")
-    rl.SetShaderValueTexture(game.ball_shader, spritesheet_location, game.ball_animation_texture)
     
     rl.DrawTexturePro(
         ball.texture,
@@ -506,16 +593,16 @@ draw_ball :: proc(using ball: ^Ball) {
         ball_color
     )
     rl.EndShaderMode();
-    if is_dragging {
+    if is_dragging && can_fling{
+        //draw line to show fling strength
         rl.DrawLineEx(position, drag_current, 2, rl.BLUE)
-        
-        direction := m.normalize(position - drag_current)
-        arrow_end := drag_current + direction * 20
-        rl.DrawLineEx(drag_current, arrow_end, 2, rl.RED)
         
         drag_distance := m.length(drag_current - position)
         fling_strength := m.clamp(drag_distance * FLING_FACTOR, MIN_VELOCITY, MAX_VELOCITY)
         strength_ratio := (fling_strength - MIN_VELOCITY) / (MAX_VELOCITY - MIN_VELOCITY)
+        direciton_vector := m.normalize(drag_current - position)
+
+        rl.DrawLineEx(position, position - direciton_vector * 500 * strength_ratio, 2, rl.RED)
         rl.DrawCircleV(position, 5 + strength_ratio * 15, rl.YELLOW)
     }
 }
