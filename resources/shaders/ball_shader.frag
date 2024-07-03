@@ -42,9 +42,8 @@ void main()
 
     vec2 new_uv = floor(uv * 28) / 28;
     new_uv += 1.0 / (28.0 * 2);
-
     
-    // Convert UV to 3D point on a sphere
+    // UV to 3D point on a sphere
     vec2 sphereUV = (new_uv * 2.0 - 1.0) * scale;
     float x = sphereUV.x;
     float y = sphereUV.y;
@@ -53,16 +52,14 @@ void main()
     float z = sqrt(z2);
     vec3 spherePoint = vec3(x, y, z);
     
-    // Normalize the point to ensure it's on the sphere surface
+    // normalize the point to ensure it's on the sphere surface
     vec3 normal = normalize(spherePoint);
     
-    // Calculate rotation matrix
     mat3 rotation = rotateXYZ(iRotation);
     
     // Rotate the sphere point for texture mapping
     vec3 rotatedSpherePoint = rotation * spherePoint;
     
-    // Calculate texture coordinates using rotated point
     vec2 finalUV = vec2(
         atan(rotatedSpherePoint.z, rotatedSpherePoint.x) / (2.0 * PI) + 0.5,
         asin(rotatedSpherePoint.y) / PI + 0.5
@@ -73,13 +70,12 @@ void main()
 
     texColor.rgb *= fragColor.rgb;
     
-    // Lighting calculation (using unrotated normal)
     vec3 lightDir = normalize(vec3(1.5, 1.0, 1.0)); // Light direction in world space
     float diffuse = max(dot(normal, lightDir), 0.0);
-    //smooth out light intensity
+
     diffuse = linearToSrgb(diffuse);
-    float ambient = 0.5; // Ambient light intensity
-    vec3 viewDir = vec3(0.0, 0.0, 1.0); // Assuming the view is always from positive z
+    float ambient = 0.5;
+    vec3 viewDir = vec3(0.0, 0.0, 1.0);
     vec3 reflectDir = reflect(-lightDir, normal);
     float specular = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
     
@@ -88,13 +84,13 @@ void main()
     float distFromCenter = length(sphereUV);
     float alpha = smoothstep(1.0, 0.99, distFromCenter);
     
-    vec2 shadowOffset = vec2(-lightDir.x, -lightDir.y) * 0.05; // Reduced from 0.1 to 0.05
+    vec2 shadowOffset = vec2(-lightDir.x, -lightDir.y) * 0.05;
     vec2 shadowUV = new_uv - vec2(0.5) - shadowOffset;
-    float shadowDistance = length(shadowUV) * 2.2; // Increased from 1.9 to 2.2
+    float shadowDistance = length(shadowUV) * 2.2; 
     
-    float shadowSoftness = 1.0; // Increased from 0.2 to 0.3
+    float shadowSoftness = 1.0;
     float shadow = 1.0 - smoothstep(1.0 - shadowSoftness, 1.0, shadowDistance);
-    shadow *= 0.9; // Reduce shadow intensity by half
+    shadow *= 0.9;
     
     litColor = mix(litColor, vec3(0.0), (1.0 - alpha));
     
