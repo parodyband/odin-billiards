@@ -18,6 +18,16 @@ BALL_COUNT    :: 16
 RESTITUTION   :: 0.999
 FLING_FACTOR  :: 20.0   
 RENDER_DEBUG  :: false
+GLSL_VERSION :: "#version 330"
+
+DIRECTION_UP     :: rl.Vector2{0, -1}
+DIRECTION_DOWN   :: rl.Vector2{0, 1}
+DIRECTION_LEFT   :: rl.Vector2{-1, 0}
+DIRECTION_RIGHT  :: rl.Vector2{1, 0}
+DIRECTION_UPLEFT :: rl.Vector2{-0.707, -0.707}
+DIRECTION_UPRIGHT:: rl.Vector2{0.707, -0.707}
+DIRECTION_DOWNLEFT :: rl.Vector2{-0.707, 0.707}
+DIRECTION_DOWNRIGHT:: rl.Vector2{0.707, 0.707}
 
 // Structs
 Table :: struct {
@@ -31,7 +41,10 @@ Ball :: struct {
     position, worldPosition, velocity, previousPosition : rl.Vector2,
     is_dragging                                         : bool,
     drag_current                                        : rl.Vector2,
+    rotation                                            : rl.Vector3,
     is_out_of_play                                      : bool,
+    angular_velocity                                    : rl.Vector3,
+    texture                                             : rl.Texture2D,
 }
 
 Cursor :: struct {
@@ -46,8 +59,14 @@ GameState :: struct {
     screen_width       : i32,
     screen_height      : i32,
     sprite_atlas       : rl.Texture2D,
+    ball_animation_texture : rl.Texture2D,
+    ball_shader        : rl.Shader,
     fullscreen_texture : rl.RenderTexture2D,
     real_screen_params : rl.Vector2,
+    time               : f64,
+    delta_time         : f32,
+    balltextures       : [16]rl.Texture2D
+
 }
 
 PolygonCollider :: struct {
@@ -59,12 +78,20 @@ CircleCollider :: struct {
     radius   : f32,
 }
 
+BallAnimation :: struct {
+    frames: [4][12]rl.Rectangle,
+}
+
+
 // Global state
 game : GameState
 
 colliders : [6]PolygonCollider
 
 circle_colliders : [6]CircleCollider
+
+ball_animations : BallAnimation
+
 
 main :: proc() {
     init_game()
@@ -94,6 +121,7 @@ init_game :: proc() {
     game.real_screen_params = rl.Vector2{f32(game.screen_width), f32(game.screen_height)}
     game.fullscreen_texture = rl.LoadRenderTexture(game.screen_width, game.screen_height)
     game.sprite_atlas = load_texture_from_embedded(TextureData.sprite_sheet)
+    game.ball_shader = rl.LoadShader("resources/shaders/ball_shader.vert", "resources/shaders/ball_shader.frag")
 
     init_data()
 }
@@ -122,18 +150,36 @@ init_data :: proc() {
         position    = {0, 0},
     }
 
+    game.balltextures[0] = load_texture_from_embedded(TextureData.ball_1)
+    game.balltextures[1] = load_texture_from_embedded(TextureData.ball_2)
+    game.balltextures[2] = load_texture_from_embedded(TextureData.ball_3)
+    game.balltextures[3] = load_texture_from_embedded(TextureData.ball_4)
+    game.balltextures[4] = load_texture_from_embedded(TextureData.ball_5)
+    game.balltextures[5] = load_texture_from_embedded(TextureData.ball_6)
+    game.balltextures[6] = load_texture_from_embedded(TextureData.ball_7)
+    game.balltextures[7] = load_texture_from_embedded(TextureData.ball_8)
+    game.balltextures[8] = load_texture_from_embedded(TextureData.ball_9)
+    game.balltextures[9] = load_texture_from_embedded(TextureData.ball_10)
+    game.balltextures[10] = load_texture_from_embedded(TextureData.ball_11)
+    game.balltextures[11] = load_texture_from_embedded(TextureData.ball_12)
+    game.balltextures[12] = load_texture_from_embedded(TextureData.ball_13)
+    game.balltextures[13] = load_texture_from_embedded(TextureData.ball_14)
+    game.balltextures[14] = load_texture_from_embedded(TextureData.ball_15)
+    game.balltextures[15] = load_texture_from_embedded(TextureData.ball_16)
+
     // Balls
     for i := 0; i < BALL_COUNT; i += 1 {
         angle := rand.float32_range(0, 2 * m.PI)
         direction := rl.Vector2{m.cos(angle), m.sin(angle)}
         balls[i] = Ball{
-            atlasBounds = {237, 13, 22, 22},
+            atlasBounds = {0, 0, 767, 767},
             position = {
                 f32(screen_width) / 4 + f32(i) * f32(BALL_SCALE) * 1.1,
                 f32(screen_height) / 2,
             },
             velocity = direction * 100,
             is_out_of_play = false,
+            texture = game.balltextures[i],
         }
         balls[i].previousPosition = balls[i].position
     }
@@ -226,6 +272,7 @@ init_data :: proc() {
 cleanup :: proc() {
     rl.UnloadRenderTexture(game.fullscreen_texture)
     rl.UnloadTexture(game.sprite_atlas)
+    rl.UnloadTexture(game.ball_animation_texture)
     rl.CloseWindow()
 }
 
@@ -288,7 +335,7 @@ update_ball :: proc(ball: ^Ball, delta_time: f32) {
     ball.position += ball.velocity * delta_time
     ball.velocity *= FRICTION
     check_ball_polygon_collision(ball, colliders[:])
-    
+
     // eventually make this nicer, animation maybe
     should_disable := check_ball_circle_trigger(ball, circle_colliders[:])
     if should_disable {
@@ -403,9 +450,36 @@ draw_balls :: proc() {
 }
 
 draw_ball :: proc(using ball: ^Ball) {
-    new_ball_scale := f32(BALL_SCALE * 1.375)
+    new_ball_scale := f32(BALL_SCALE * 1)
     dest_rect := rl.Rectangle{position.x - new_ball_scale/2, position.y - new_ball_scale/2, new_ball_scale, new_ball_scale}
+
+    // Update rotation based on velocity
+    speed := m.length(velocity)
+    rotation_factor : f32 = 0.0001 // Adjust this to control rotation speed
+    friction : f32 = 0.98 // Friction factor for rotation
+
+    // Calculate rotation based on movement
+    movement := position - previousPosition
+    rotation_x := -movement.y * rotation_factor // Rotate around x-axis based on vertical movement
+    rotation_y := movement.x * rotation_factor  // Rotate around y-axis based on horizontal movement
     
+    // Update angular velocity
+    angular_velocity.x -= rotation_x
+    angular_velocity.y -= rotation_y
+    angular_velocity.z -= speed * rotation_factor * 0.04 // Small z-rotation for rolling effect
+
+    // Apply friction to angular velocity
+    angular_velocity *= friction
+
+    // Update rotation
+    rotation += angular_velocity
+
+    // Stop rotation when it's very slow
+    min_angular_velocity : f32 = 0.001
+    if m.length(angular_velocity) < min_angular_velocity {
+        angular_velocity = {0, 0, 0}
+    }
+
     ball_color := rl.WHITE
     if is_dragging {
         ball_color = rl.GREEN
@@ -413,15 +487,25 @@ draw_ball :: proc(using ball: ^Ball) {
         ball_color = rl.RED
     }
     
+    rl.BeginShaderMode(game.ball_shader);
+
+    // Pass rotation to shader
+    rotation_loc := rl.GetShaderLocation(game.ball_shader, "iRotation")
+    rl.SetShaderValue(game.ball_shader, rotation_loc, &rotation, rl.ShaderUniformDataType.VEC3)
+    
+    // Set the texture for the ball animation
+    spritesheet_location := rl.GetShaderLocation(game.ball_shader, "animationSheet")
+    rl.SetShaderValueTexture(game.ball_shader, spritesheet_location, game.ball_animation_texture)
+    
     rl.DrawTexturePro(
-        game.sprite_atlas,
-        atlasBounds,
+        ball.texture,
+        rl.Rectangle{0, 0, 64, 64},
         dest_rect,
-        {0, 0},
+        {0,0},
         0,
         ball_color
     )
-    
+    rl.EndShaderMode();
     if is_dragging {
         rl.DrawLineEx(position, drag_current, 2, rl.BLUE)
         

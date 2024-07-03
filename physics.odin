@@ -127,6 +127,9 @@ edge_circle_collision :: proc(circle_center, circle_previous_center, line_start,
 }
 
 resolve_collision :: proc(ball1, ball2: ^Ball) {
+    if ball1.is_out_of_play || ball2.is_out_of_play{
+        return
+    }
     delta := ball2.position - ball1.position
     distance := m.length(delta)
     if distance < BALL_SCALE {
