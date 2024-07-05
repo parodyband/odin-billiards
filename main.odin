@@ -145,6 +145,7 @@ init_data :: proc() {
         f32(screen_width) / 2 - tableBounds.x / 2,
         f32(screen_height) / 2 - tableBounds.y / 2,
     }
+
     width_factor  := f32(screen_width) / table.atlasBounds.width
     height_factor := f32(screen_height) / table.atlasBounds.height
 
@@ -277,14 +278,18 @@ init_data :: proc() {
 cleanup :: proc() {
     rl.UnloadRenderTexture(game.fullscreen_texture)
     rl.UnloadTexture(game.sprite_atlas)
+    rl.UnloadShader(game.ball_shader)
+
     for i := 0; i < BALL_COUNT; i += 1 {
         rl.UnloadTexture(game.balls[i].texture)
     }
-    rl.UnloadShader(game.ball_shader)
+    
     UnloadSoundsFromPool(rack_sound_pool)
     UnloadSoundsFromPool(strike_sound_pool)
     UnloadSoundsFromPool(hit_sound_pool)
     UnloadSoundsFromPool(side_hit_sound_pool)
+    UnloadSoundsFromPool(pocket_sound_pool)
+
     rl.CloseAudioDevice()
     rl.CloseWindow()
 }
