@@ -57,6 +57,15 @@ Cursor :: struct {
     position    : rl.Vector2,
 }
 
+PolygonCollider :: struct {
+    vertices : [dynamic]rl.Vector2,
+}
+
+CircleCollider :: struct {
+    position : rl.Vector2,
+    radius   : f32,
+}
+
 GameState :: struct {
     table              : Table,
     cursor             : Cursor,
@@ -74,24 +83,9 @@ GameState :: struct {
     circle_colliders   : [6]CircleCollider
 }
 
-PolygonCollider :: struct {
-    vertices : [dynamic]rl.Vector2,
-}
-
-CircleCollider :: struct {
-    position : rl.Vector2,
-    radius   : f32,
-}
-
-BallAnimation :: struct {
-    frames: [4][12]rl.Rectangle,
-}
-
 
 // Global state
 game : GameState
-
-
 
 
 main :: proc() {
