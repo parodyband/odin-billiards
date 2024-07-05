@@ -13,23 +13,23 @@ BALL_SCALE    :: 64
 PHYSICS_FPS   :: 60
 PHYSICS_DT    :: 1.0 / f32(PHYSICS_FPS)
 MIN_VELOCITY  :: 5.0
-MAX_VELOCITY  :: 4000.0
+MAX_VELOCITY  :: 5000.0
 FRICTION      :: 0.99
 BALL_COUNT    :: 16
 RESTITUTION   :: 0.9999
-FLING_FACTOR  :: 10.0   
+FLING_FACTOR  :: 10.0
 RENDER_DEBUG  :: false
 BALL_DIAMETER :: f32(BALL_SCALE) * 1.1
 RACK_X_OFFSET :: 0.7      // Percentage of screen width
 RACK_Y_OFFSET :: 0.5      // Percentage of screen height
 CUE_BALL_X_OFFSET :: 0.25 // Percentage of screen width for cue ball
 
-DIRECTION_UP     :: rl.Vector2{0, -1}
-DIRECTION_DOWN   :: rl.Vector2{0, 1}
-DIRECTION_LEFT   :: rl.Vector2{-1, 0}
-DIRECTION_RIGHT  :: rl.Vector2{1, 0}
-DIRECTION_UPLEFT :: rl.Vector2{-0.707, -0.707}
-DIRECTION_UPRIGHT:: rl.Vector2{0.707, -0.707}
+DIRECTION_UP       :: rl.Vector2{0, -1}
+DIRECTION_DOWN     :: rl.Vector2{0, 1}
+DIRECTION_LEFT     :: rl.Vector2{-1, 0}
+DIRECTION_RIGHT    :: rl.Vector2{1, 0}
+DIRECTION_UPLEFT   :: rl.Vector2{-0.707, -0.707}
+DIRECTION_UPRIGHT  :: rl.Vector2{0.707, -0.707}
 DIRECTION_DOWNLEFT :: rl.Vector2{-0.707, 0.707}
 DIRECTION_DOWNRIGHT:: rl.Vector2{0.707, 0.707}
 
@@ -69,7 +69,9 @@ GameState :: struct {
     real_screen_params : rl.Vector2,
     time               : f64,
     delta_time         : f32,
-    balltextures       : [16]rl.Texture2D
+    balltextures       : [16]rl.Texture2D,
+    colliders          : [6]PolygonCollider,
+    circle_colliders   : [6]CircleCollider
 }
 
 PolygonCollider :: struct {
@@ -89,8 +91,7 @@ BallAnimation :: struct {
 // Global state
 game : GameState
 
-colliders : [6]PolygonCollider
-circle_colliders : [6]CircleCollider
+
 
 
 main :: proc() {
@@ -363,10 +364,10 @@ update_ball :: proc(ball: ^Ball, delta_time: f32) {
     ball.previousPosition = ball.position
     ball.position += ball.velocity * delta_time
     ball.velocity *= FRICTION
-    check_ball_polygon_collision(ball, colliders[:])
+    check_ball_polygon_collision(ball, game.colliders[:])
 
     // eventually make this nicer, animation maybe
-    should_disable := check_ball_circle_trigger(ball, circle_colliders[:])
+    should_disable := check_ball_circle_trigger(ball, game.circle_colliders[:])
     if should_disable {
         if ball.can_fling {
             ball.position = rl.Vector2{
@@ -513,29 +514,32 @@ draw_game :: proc(delta_time: f32) {
 
 draw_debug_colliders :: proc()
 {
+    using game
     for collider in circle_colliders {
         rl.DrawCircleLinesV(collider.position, collider.radius, rl.RED)
     }
 }
 
 draw_table :: proc() {
-    tableBounds := rl.Vector2{f32(game.screen_width), f32(game.screen_height)}
+    using game
+    tableBounds := rl.Vector2{f32(screen_width), f32(screen_height)}
     rl.DrawTexturePro(
-        game.sprite_atlas,
-        game.table.atlasBounds,
+        sprite_atlas,
+        table.atlasBounds,
         {0, 0, tableBounds.x, tableBounds.y},
-        game.table.position,
+        table.position,
         0,
         rl.WHITE
     )
 }
 
 draw_balls :: proc() {
+    using game
     for i := 0; i < BALL_COUNT; i += 1 {
-        if game.balls[i].is_out_of_play {
+        if balls[i].is_out_of_play {
             continue
         }
-        draw_ball(&game.balls[i])
+        draw_ball(&balls[i])
     }
 }
 
@@ -587,14 +591,14 @@ draw_ball :: proc(using ball: ^Ball) {
     rl.EndShaderMode();
     if is_dragging && can_fling{
         //draw line to show fling strength
-        rl.DrawLineEx(position, drag_current, 2, rl.BLUE)
+        rl.DrawLineEx(position, drag_current, 5, rl.BLUE)
         
         drag_distance := m.length(drag_current - position)
         fling_strength := m.clamp(drag_distance * FLING_FACTOR, MIN_VELOCITY, MAX_VELOCITY)
         strength_ratio := (fling_strength - MIN_VELOCITY) / (MAX_VELOCITY - MIN_VELOCITY)
         direciton_vector := m.normalize(drag_current - position)
 
-        rl.DrawLineEx(position, position - direciton_vector * 500 * strength_ratio, 2, rl.RED)
+        rl.DrawLineEx(position, position - direciton_vector * 500 * strength_ratio, 5, rl.RED)
         rl.DrawCircleV(position, 5 + strength_ratio * 15, rl.YELLOW)
     }
 }
