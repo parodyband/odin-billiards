@@ -22,7 +22,7 @@ RENDER_DEBUG  :: false
 BALL_DIAMETER :: f32(BALL_SCALE) * 1.1
 RACK_X_OFFSET :: 0.7      // Percentage of screen width
 RACK_Y_OFFSET :: 0.5      // Percentage of screen height
-CUE_BALL_X_OFFSET :: 0.25 // Percentage of screen width for cue ball
+CUE_X_OFFSET  :: 0.25     // Percentage of screen width for cue ball
 
 DIRECTION_UP       :: rl.Vector2{0, -1}
 DIRECTION_DOWN     :: rl.Vector2{0, 1}
@@ -133,14 +133,6 @@ init_data :: proc() {
                 default_font.baseSize, default_font.glyphCount)
     }
 
-    // Compare with loading from file
-    file_font := rl.LoadFont("resources/fonts/romulus.png")
-    if file_font.texture.id == 0 {
-        fmt.println("Failed to load font from file")
-    } else {
-        fmt.println("File font loaded successfully: baseSize=%d, glyphCount=%d\n", 
-                file_font.baseSize, file_font.glyphCount)
-    }
     // Table
     table = Table{
         atlasBounds     = {0, 0, 224, 128},
@@ -194,6 +186,7 @@ init_data :: proc() {
         }
         balls[i].previousPosition = balls[i].position
     }
+
     rack_balls(&balls)
 
     colliders[0] = PolygonCollider{
@@ -365,7 +358,7 @@ update_ball :: proc(ball: ^Ball, delta_time: f32) {
     if should_disable {
         if ball.can_fling {
             ball.position = rl.Vector2{
-                f32(game.screen_width) * CUE_BALL_X_OFFSET,
+                f32(game.screen_width) * CUE_X_OFFSET,
                 f32(game.screen_height) * RACK_Y_OFFSET,
             }
             ball.velocity = {0, 0}
@@ -417,7 +410,7 @@ rack_balls :: proc(balls: ^[BALL_COUNT]Ball) {
     // Position the cue ball
     cue_ball := &balls[BALL_COUNT - 1]
     cue_ball.position = rl.Vector2{
-        f32(game.screen_width) * CUE_BALL_X_OFFSET,
+        f32(game.screen_width) * CUE_X_OFFSET,
         f32(game.screen_height) * RACK_Y_OFFSET,
     }
     cue_ball.velocity = {0, 0}
