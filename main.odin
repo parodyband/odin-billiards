@@ -430,7 +430,7 @@ start_drag :: proc(ball: ^Ball) {
     ball.drag_current = rl.GetMousePosition()
 }
 
-end_drag :: proc(ball: ^Ball) {
+end_drag :: proc(ball: ^Ball){
     if ball.is_dragging && ball.can_fling{
         ball.is_dragging = false
         fling_vector := ball.position - ball.drag_current
@@ -504,8 +504,7 @@ draw_game :: proc(delta_time: f32) {
     }
 }
 
-draw_debug_colliders :: proc()
-{
+draw_debug_colliders :: proc(){
     using game
     for collider in circle_colliders {
         rl.DrawCircleLinesV(collider.position, collider.radius, rl.RED)
