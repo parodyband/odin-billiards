@@ -24,15 +24,6 @@ RACK_X_OFFSET :: 0.7      // Percentage of screen width
 RACK_Y_OFFSET :: 0.5      // Percentage of screen height
 CUE_X_OFFSET  :: 0.25     // Percentage of screen width for cue ball
 
-DIRECTION_UP       :: rl.Vector2{0, -1}
-DIRECTION_DOWN     :: rl.Vector2{0, 1}
-DIRECTION_LEFT     :: rl.Vector2{-1, 0}
-DIRECTION_RIGHT    :: rl.Vector2{1, 0}
-DIRECTION_UPLEFT   :: rl.Vector2{-0.707, -0.707}
-DIRECTION_UPRIGHT  :: rl.Vector2{0.707, -0.707}
-DIRECTION_DOWNLEFT :: rl.Vector2{-0.707, 0.707}
-DIRECTION_DOWNRIGHT:: rl.Vector2{0.707, 0.707}
-
 // Structs
 Table :: struct {
     atlasBounds     : rl.Rectangle,
