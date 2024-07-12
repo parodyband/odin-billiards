@@ -24,7 +24,6 @@ RACK_X_OFFSET :: 0.7      // Percentage of screen width
 RACK_Y_OFFSET :: 0.5      // Percentage of screen height
 CUE_X_OFFSET  :: 0.25     // Percentage of screen width for cue ball
 
-// Structs
 Table :: struct {
     atlasBounds     : rl.Rectangle,
     collisionBounds : rl.Rectangle,
